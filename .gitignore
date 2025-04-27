@@ -1,3 +1,7 @@
+#Test
+/Src/test.*
+
+
 # http://www.gnu.org/software/automake
 
 Makefile.in
