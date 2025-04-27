@@ -32,6 +32,16 @@ Func _Pause()
 EndFunc
 
 Global $sFile = @ScriptDir & "\coords.txt" ;coords in stash have been get
+Global $xmlPath = @ScriptDir & "\Items.xml"
+; Cost
+Global $Agu = 0
+Global $Regal = 0
+Global $Alchemy = 0
+Global $Exalt = 0
+Global $OmenAlchemy = 0
+Global $OmenCorona = 0
+Global $OmenExalt = 0
+
 
 Global $item[200][4]
 ;~ Item object with:
@@ -42,9 +52,9 @@ Global $item[200][4]
 
 ;~ Type:
 ;~ 1. use "Omen of Sinistral Alchemy" and "Alchemy" to make it rare (4 modifi). Total: 1 omen alchemy, 1 alchemy
-;~ 2. use **Agument** to +1 modifi -> use **Omen of Dextral Coronation** and "Regal Orb" to make it rare (3 modifies)
+;~ 2 and 3. use **Agument** to +1 modifi -> use **Omen of Dextral Coronation** and "Regal Orb" to make it rare (3 modifies)
 ;~ 			Total: 1 agument, 1 omen if dextrak, 1 regal orb
-;~ 3. use **Omen of Sinistral Exaltation** and **Exalt Orb** to make it +1 prefit. Total: 1 Omen of exalt, 1 Exalt
+;~ 4. use **Omen of Sinistral Exaltation** and **Exalt Orb** to make it +1 prefit. Total: 1 Omen of exalt, 1 Exalt
 
 
 ;~ XML to save data
@@ -72,7 +82,7 @@ Func _AddToDatabase($item)
 		$oRoot.appendChild($oItem)
 	Next
 	
-	$oXML.save("Items.xml")
+	$oXML.save(@ScriptDir & "\Items.xml")
 EndFunc
 
 Func _LoadItems()
@@ -99,28 +109,109 @@ Func _LoadItems()
 	
 		$item[$i][0] = $sX
 		$item[$i][1] = $sY
-		MouseMove($sX, $sY, 0)
-		Sleep(500)
+		MouseMove($sX, $sY, 10)
+		Sleep(100)
 		Send("^c")
 		Local $mod = ClipGet()
-		If $mod = "" Then
-			ExitLoop
-		EndIf
 		Local $sRarity = StringRegExpReplace($mod, "(?s).*Rarity: (.+?)\R.*", "\1")
 		Local $sRevives = StringRegExpReplace($mod, "(?s).*Revives Available: (.+?)\R.*", "\1")
 		ClipPut("")
 		$item[$i][2] = $sRarity
 		$item[$i][3] = Number($sRevives)
-
+	Next
+	For $i = 0 To 144 Step 1
+		If $item[$i][2] = "" Then
+			MouseMove($item[$i][0], $item[$i][1], 10)
+			;~ Sleep(100)
+			Send("^c")
+			$mod = ClipGet()
+			Local $sRarity = StringRegExpReplace($mod, "(?s).*Rarity: (.+?)\R.*", "\1")
+			Local $sRevives = StringRegExpReplace($mod, "(?s).*Revives Available: (.+?)\R.*", "\1")
+			ClipPut("")
+			$item[$i][2] = $sRarity
+			$item[$i][3] = Number($sRevives)
+		EndIf
 	Next
 	FileClose($hFile)
 EndFunc
 
+Func _LoadFromXML($path)
+	Local $oXML = ObjCreate("MSXML2.DOMDocument.6.0")
+	;~ ConsoleWrite($oXML)
+	$oXML.load($path)
+	Sleep(1000)
+	If Not $oXML.load($path) Then
+		MsgBox(16, "Lỗi", "Ko mở dc xml:" & $oXML.parseError.reason)
+		Exit
+	EndIf
+	Local $oItems = $oXML.selectNodes("/Items/Item")
+	For $i = 0 To $oItems.length - 1
+		Local $oItem = $oItems.item($i)
+		Local $x = $oItem.selectSingleNode("x").text
+		Local $y = $oItem.selectSingleNode("y").text
+		Local $rarity = $oItem.selectSingleNode("Rarity").text
+		Local $type = $oItem.selectSingleNode("Type").text
+		
+		;~ ReDim $item[UBound($item) + 1][4]
+		$item[$i][0] = $x
+		$item[$i][1] = $y
+		$item[$i][2] = $rarity
+		$item[$i][3] = $type
+	Next
+EndFunc
 
-WinActivate("Path of Exile 2")
+;~ Choose [0, 1]:
+;~ 0. Maximum is rare
+;~ 1. Maximum is rare and if have rare, make it +1 prefit
+Func _CalcCost($choose)
+	For $i = 0 To UBound($item) - 1 Step 1
+		If $item[$i][2] = "Normal" Then
+			;Type = 1
+			$item[$i][3] = 1
+			$OmenAlchemy += 1
+			$Alchemy += 1
+		ElseIf $item[$i][2] = "Magic" Then
+			If $item[$i][3] = 5 Then
+				;type = 2
+				$item[$i][3] = 2
+				$Agu += 1
+			Else
+				;type = 3
+				$item[$i][3] = 3
+			EndIf
+			$OmenCorona += 1
+			$Regal += 1
+		ElseIf ($item[$i][2] = "Rare" AND $choose = 1) Then
+			$item[$i][3] = 4
+			$OmenExalt += 1
+			$Exalt += 1
+		EndIf
+	Next
+	Local $ArrayCost[2][7]
+	$ArrayCost[0][0] = "Agument"
+	$ArrayCost[0][1] = "Regal"
+	$ArrayCost[0][2] = "Alchemy"
+	$ArrayCost[0][3] = "Exalt"
+	$ArrayCost[0][4] = "Omen of Sinistral Alchemy"
+	$ArrayCost[0][5] = "Omen of Dextral Coronation"
+	$ArrayCost[0][6] = "Omen of Sinistral Exaltation"
+	$ArrayCost[1][0] = $Agu
+	$ArrayCost[1][1] = $Regal
+	$ArrayCost[1][2] = $Alchemy
+	$ArrayCost[1][3] = $Exalt
+	$ArrayCost[1][4] = $OmenAlchemy
+	$ArrayCost[1][5] = $OmenCorona
+	$ArrayCost[1][6] = $OmenExalt
+	Return $ArrayCost
+EndFunc
+
+;~ WinActivate("Path of Exile 2")
 Sleep(100)
-_LoadItems()
-
+;~ _LoadItems()
+;~ _AddToDatabase($item)
+_LoadFromXML($xmlPath)
 _ArrayDisplay($item)
+$cost = _CalcCost(1)
+_ArrayDisplay($cost)
 
 Sleep(10000)
